@@ -1,4 +1,57 @@
-export type DocumentCategory = "contract" | "case_law" | "statute" | "brief" | "policy";
+export type DocumentCategory = "contract" | "case_law" | "statute" | "brief" | "policy" | "indian_judgment";
+
+// Indian Law Pipeline Types
+export interface IndianJudgmentRecord {
+  id: string;
+  courtId: "SCI" | "DHC" | "BHC" | "MHC" | "CAL" | "ALL" | string;
+  courtName: string;
+  caseNumber: string;
+  diaryNumber?: string;
+  cnrNumber?: string;
+  citation: string;
+  title: string;
+  petitioner: string;
+  respondent: string;
+  bench: string[];
+  judgmentDate: string;
+  disposalNature: string;
+  sourceOrigin: "AWS_OPEN_DATA" | "SCI_DAILY_SCRAPER" | "ECOURTS_SYNC" | "OFFICIAL_REGISTRY";
+  pdfSha256: string;
+  actsCited?: string[];
+  fullTextSnippet: string;
+  fullText?: string;
+  ragChunksCount: number;
+  syncStatus: "synced" | "delta_ingested" | "embedding_ready";
+}
+
+export interface PipelineSyncMetrics {
+  totalHistoricalIndexed: number;
+  totalHighCourtJudgments: number;
+  todayDeltaIngested: number;
+  lastDeltaSyncTime: string;
+  activeScraperStatus: "idle" | "syncing_sci" | "syncing_ecourts" | "chunking";
+  sha256DeduplicationRate: string;
+  avgChunkEmbeddingMs: number;
+  vpsResourceUsage: {
+    cpuPercent: number;
+    ramUsedMb: number;
+    ramTotalMb: number;
+    diskUsedGb: number;
+    diskTotalGb: number;
+  };
+}
+
+export interface ScraperJobLog {
+  id: string;
+  timestamp: string;
+  source: string;
+  court: string;
+  status: "SUCCESS" | "SYNCING" | "SKIPPED_DEDUP" | "RATE_LIMIT_BACKOFF";
+  recordsProcessed: number;
+  recordsNew: number;
+  sha256Verified: number;
+  message: string;
+}
 
 export interface DocumentChunk {
   id: string;

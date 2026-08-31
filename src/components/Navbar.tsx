@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 
 interface NavbarProps {
-  activeTab: "contract" | "rag" | "summary" | "graph" | "timeline" | "documents";
-  setActiveTab: (tab: "contract" | "rag" | "summary" | "graph" | "timeline" | "documents") => void;
+  activeTab: "contract" | "rag" | "summary" | "graph" | "timeline" | "documents" | "indian_law";
+  setActiveTab: (tab: "contract" | "rag" | "summary" | "graph" | "timeline" | "documents" | "indian_law") => void;
   documents: DocumentItem[];
   selectedDocumentId: string | null;
   onSelectDocument: (id: string) => void;
@@ -225,6 +225,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 Risk {contractRiskScore}/100
               </span>
             )}
+          </button>
+
+          <button
+            id="tab-indian-law-pipeline"
+            onClick={() => setActiveTab("indian_law")}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all shrink-0 ${
+              activeTab === "indian_law"
+                ? "bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-xs font-semibold"
+                : "text-slate-700 hover:text-slate-950 hover:bg-slate-100"
+            }`}
+          >
+            <Scale className="w-4 h-4 text-emerald-300" />
+            <span>Indian Law Pipeline</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              AWS + Scraper
+            </span>
           </button>
 
           <button

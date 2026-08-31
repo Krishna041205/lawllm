@@ -7,6 +7,7 @@ import { CitationGraph } from "./components/CitationGraph";
 import { TimelineBuilder } from "./components/TimelineBuilder";
 import { DocumentManager } from "./components/DocumentManager";
 import { UploadModal } from "./components/UploadModal";
+import { IndianLawPipeline } from "./components/IndianLawPipeline";
 import {
   DocumentItem,
   ContractAnalysis,
@@ -14,12 +15,13 @@ import {
   StructuredSummary,
   CitationGraphData,
   TimelineEvent,
-  RedlineClauseResult
+  RedlineClauseResult,
+  IndianJudgmentRecord
 } from "./types";
 import { SampleContractPreset, SAMPLE_PRESETS } from "./data/sampleContracts";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"contract" | "rag" | "summary" | "graph" | "timeline" | "documents">("contract");
+  const [activeTab, setActiveTab] = useState<"contract" | "rag" | "summary" | "graph" | "timeline" | "documents" | "indian_law">("contract");
   
   // Documents state
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -42,6 +44,31 @@ export default function App() {
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
 
+  // Safe JSON API fetcher that prevents "Unexpected token <" HTML parse errors
+  const safeFetchJson = async <T = any>(url: string, options?: RequestInit): Promise<T | null> => {
+    try {
+      const res = await fetch(url, options);
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        console.warn(`API request to ${url} returned status ${res.status}`);
+      }
+      if (contentType.includes("application/json")) {
+        return await res.json();
+      }
+      // If server returned plain text or html unexpectedly
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        console.warn(`Non-JSON response received from ${url}:`, text.slice(0, 120));
+        return null;
+      }
+    } catch (err) {
+      console.error(`Network or fetch error on ${url}:`, err);
+      return null;
+    }
+  };
+
   // Load documents on initial boot
   useEffect(() => {
     fetchDocuments();
@@ -49,9 +76,8 @@ export default function App() {
 
   const fetchDocuments = async () => {
     try {
-      const res = await fetch("/api/documents");
-      const data = await res.json();
-      if (data.documents && data.documents.length > 0) {
+      const data = await safeFetchJson<{ documents: DocumentItem[] }>("/api/documents");
+      if (data?.documents && data.documents.length > 0) {
         setDocuments(data.documents);
         const defaultDoc = data.documents[0];
         setSelectedDocumentId(defaultDoc.id);
@@ -69,13 +95,12 @@ export default function App() {
     if (!targetId) return;
     setIsAnalyzingContract(true);
     try {
-      const res = await fetch("/api/contract/analyze", {
+      const data = await safeFetchJson<{ analysis: ContractAnalysis; documentTitle?: string }>("/api/contract/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: targetId })
       });
-      const data = await res.json();
-      if (data.analysis) {
+      if (data?.analysis) {
         setContractAnalysis(data.analysis);
       }
     } catch (err) {
@@ -97,7 +122,7 @@ export default function App() {
     setIsQueryingRAG(true);
 
     try {
-      const res = await fetch("/api/research", {
+      const data = await safeFetchJson<{ answer?: string; citations?: any[] }>("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -105,13 +130,12 @@ export default function App() {
           documentId: selectedDocumentId
         })
       });
-      const data = await res.json();
       const botMsg: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: data.answer || "No response generated.",
+        content: data?.answer || "No response generated.",
         timestamp: new Date().toLocaleTimeString(),
-        citations: data.citations || []
+        citations: data?.citations || []
       };
       setChatMessages((prev) => [...prev, botMsg]);
     } catch (err) {
@@ -134,13 +158,12 @@ export default function App() {
     if (!targetId) return;
     setIsSummarizing(true);
     try {
-      const res = await fetch("/api/summarize", {
+      const data = await safeFetchJson<{ summary: StructuredSummary }>("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: targetId })
       });
-      const data = await res.json();
-      if (data.summary) {
+      if (data?.summary) {
         setSummary(data.summary);
       }
     } catch (err) {
@@ -156,9 +179,8 @@ export default function App() {
     if (!targetId) return;
     setIsGraphLoading(true);
     try {
-      const res = await fetch(`/api/graph?documentId=${targetId}`);
-      const data = await res.json();
-      if (data.nodes && data.edges) {
+      const data = await safeFetchJson<CitationGraphData>(`/api/graph?documentId=${targetId}`);
+      if (data?.nodes && data?.edges) {
         setGraphData(data);
       }
     } catch (err) {
@@ -174,9 +196,8 @@ export default function App() {
     if (!targetId) return;
     setIsTimelineLoading(true);
     try {
-      const res = await fetch(`/api/timeline?documentId=${targetId}`);
-      const data = await res.json();
-      if (data.events) {
+      const data = await safeFetchJson<{ events: TimelineEvent[] }>(`/api/timeline?documentId=${targetId}`);
+      if (data?.events) {
         setTimelineEvents(data.events);
       }
     } catch (err) {
@@ -189,7 +210,7 @@ export default function App() {
   // Load Preset
   const handleLoadPreset = async (preset: SampleContractPreset) => {
     try {
-      const res = await fetch("/api/documents/upload", {
+      const data = await safeFetchJson<{ document: DocumentItem }>("/api/documents/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -199,8 +220,7 @@ export default function App() {
           category: preset.category
         })
       });
-      const data = await res.json();
-      if (data.document) {
+      if (data?.document) {
         setDocuments((prev) => [data.document, ...prev.filter((d) => d.id !== data.document.id)]);
         setSelectedDocumentId(data.document.id);
         
@@ -227,7 +247,7 @@ export default function App() {
 
   // Direct Clause Redline API Handler
   const handleDirectRedlineRequest = async (clause: string, instruction: string): Promise<RedlineClauseResult> => {
-    const res = await fetch("/api/contract/redline-clause", {
+    const data = await safeFetchJson<RedlineClauseResult>("/api/contract/redline-clause", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -236,7 +256,12 @@ export default function App() {
         partyPosition: "Customer"
       })
     });
-    return res.json();
+    return data || {
+      proposedRedline: clause,
+      protectionsGained: ["Clause review pending"],
+      fallbackPosition: "Propose mutual 30-day notice and balanced covenants.",
+      commentaryForCounterparty: "Propose mutual bilateral modification."
+    };
   };
 
   // Handle Document Upload
@@ -246,13 +271,12 @@ export default function App() {
     type: "pdf" | "docx" | "txt";
     category: any;
   }) => {
-    const res = await fetch("/api/documents/upload", {
+    const result = await safeFetchJson<{ document: DocumentItem }>("/api/documents/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
-    const result = await res.json();
-    if (result.document) {
+    if (result?.document) {
       setDocuments((prev) => [result.document, ...prev]);
       setSelectedDocumentId(result.document.id);
       setActiveTab("contract");
@@ -317,6 +341,37 @@ export default function App() {
 
       {/* Main Content Workspace Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {activeTab === "indian_law" && (
+          <IndianLawPipeline
+            onLoadJudgmentIntoRAG={async (judgment: IndianJudgmentRecord) => {
+              // Add or select as active doc, switch to RAG tab and seed query
+              const tempDoc: DocumentItem = {
+                id: judgment.id,
+                name: `${judgment.citation || judgment.caseNumber} - ${judgment.title}.pdf`,
+                type: "pdf",
+                size: "450 KB",
+                uploadedAt: judgment.judgmentDate,
+                category: "indian_judgment",
+                pageCount: 14,
+                chunksCount: judgment.ragChunksCount,
+                content: judgment.fullText || judgment.fullTextSnippet
+              };
+              setDocuments((prev) => {
+                const exists = prev.find((d) => d.id === judgment.id);
+                return exists ? prev : [tempDoc, ...prev];
+              });
+              setSelectedDocumentId(judgment.id);
+              setActiveTab("rag");
+              // Auto-seed user inquiry in RAG chat
+              setTimeout(() => {
+                handleSendRAGMessage(
+                  `Analyze the legal ratio decidendi, key holding, and applicable statutes in ${judgment.citation} (${judgment.title}) decided by Hon'ble ${judgment.bench.join(", ")}.`
+                );
+              }, 400);
+            }}
+          />
+        )}
+
         {activeTab === "contract" && (
           <ContractAnalyzer
             analysis={contractAnalysis}
